@@ -251,12 +251,15 @@ class ScanNetIndoorPairDataset(PairDataset):
     xyz0 = data0["pcd"][:,:3]
     xyz1 = data1["pcd"][:,:3]
 
-    label0 = (data0["pcd"][:,6] / 1000).astype(np.int32)
-    label1 = (data1["pcd"][:,6] / 1000).astype(np.int32)
-    instance0 = (data0["pcd"][:,6] % 1000).astype(np.int32)
-    instance1 = (data1["pcd"][:,6] % 1000).astype(np.int32)
-    color0 = data0['pcd'][:,3:6] 
-    color1 = data1['pcd'][:,3:6] 
+    feats0_ = data0["pcd"][:,:].copy()
+    feats1_ = data1["pcd"][:,:].copy()
+
+    label0 = (data0["pcd"][:,-1] / 1000).astype(np.int32)
+    label1 = (data1["pcd"][:,-1] / 1000).astype(np.int32)
+    instance0 = (data0["pcd"][:,-1] % 1000).astype(np.int32)
+    instance1 = (data1["pcd"][:,-1] % 1000).astype(np.int32)
+    color0 = data0['pcd'][:,-1] 
+    color1 = data1['pcd'][:,-1] 
 
     matching_search_voxel_size = self.matching_search_voxel_size
 
@@ -282,8 +285,15 @@ class ScanNetIndoorPairDataset(PairDataset):
     xyz1 = self.apply_transform(xyz1, T1)
 
     # Voxelization
-    sel0 = ME.utils.sparse_quantize(xyz0 / self.voxel_size, return_index=True)
-    sel1 = ME.utils.sparse_quantize(xyz1 / self.voxel_size, return_index=True)
+    xyz0_ = xyz0.copy()
+    xyz0_ = np.round(xyz0_[:,:3] / self.voxel_size)
+    xyz0_ -= xyz0_.min(0, keepdims=1)
+    _, sel0 = ME.utils.sparse_quantize(xyz0_, return_index=True)
+
+    xyz1_ = xyz1.copy()
+    xyz1_ = np.round(xyz1_[:,:3] / self.voxel_size)
+    xyz1_ -= xyz1_.min(0, keepdims=1)
+    _, sel1 = ME.utils.sparse_quantize(xyz1_, return_index=True)
 
     if not self.config.data.voxelize:
       sel0 = sel0[np.random.choice(sel0.shape[0], self.config.data.num_points, 
@@ -291,14 +301,13 @@ class ScanNetIndoorPairDataset(PairDataset):
       sel1 = sel1[np.random.choice(sel1.shape[0], self.config.data.num_points, 
                               replace=self.config.data.num_points>sel1.shape[0])]
 
-
     # Make point clouds using voxelized points
-    pcd0 = make_open3d_point_cloud(xyz0)
-    pcd1 = make_open3d_point_cloud(xyz1)
+    pcd0 = make_open3d_point_cloud(xyz0[:,:3])
+    pcd1 = make_open3d_point_cloud(xyz1[:,:3])
 
     # Select features and points using the returned voxelized indices
-    pcd0.colors = o3d.utility.Vector3dVector(color0[sel0])
-    pcd1.colors = o3d.utility.Vector3dVector(color1[sel1])
+    pcd0.colors = o3d.utility.Vector3dVector(np.ones_like(xyz0))
+    pcd1.colors = o3d.utility.Vector3dVector(np.ones_like(xyz1))
     pcd0.points = o3d.utility.Vector3dVector(np.array(pcd0.points)[sel0])
     pcd1.points = o3d.utility.Vector3dVector(np.array(pcd1.points)[sel1])
     label0 = label0[sel0]
@@ -315,16 +324,16 @@ class ScanNetIndoorPairDataset(PairDataset):
     feats_train0.append(color0)
     feats_train1.append(color1)
 
-    feats0 = np.hstack(feats_train0)
-    feats1 = np.hstack(feats_train1)
+    feats0 = np.hstack(feats_train0)[:,None]
+    feats1 = np.hstack(feats_train1)[:,None]
 
     # Get coords
     xyz0 = np.array(pcd0.points)
     xyz1 = np.array(pcd1.points)
 
     if self.config.data.voxelize:
-      coords0 = np.floor(xyz0 / self.voxel_size)
-      coords1 = np.floor(xyz1 / self.voxel_size)
+      coords0 = xyz0_[sel0]#np.floor(xyz0 / self.voxel_size)
+      coords1 = xyz1_[sel1]#np.floor(xyz1 / self.voxel_size)
     else:
       coords0 = xyz0
       coords1 = xyz1
@@ -334,17 +343,22 @@ class ScanNetIndoorPairDataset(PairDataset):
       coords0, feats0 = self.transform(coords0, feats0)
       coords1, feats1 = self.transform(coords1, feats1)
 
-    feats0 = feats0 / 255.0 - 0.5
-    feats1 = feats1 / 255.0 - 0.5
+
+    #import ipdb; ipdb.set_trace()
+    #feats0 = feats0 / 255.0 - 0.5
+    #feats1 = feats1 / 255.0 - 0.5
 
     # label mapping for monitor
-    label0 = np.array([self.label_map[x] for x in label0], dtype=np.int)
-    label1 = np.array([self.label_map[x] for x in label1], dtype=np.int)
+    #label0 = np.array([self.label_map[x] for x in label0], dtype=np.int)
+    #label1 = np.array([self.label_map[x] for x in label1], dtype=np.int)
 
     # NB(s9xie): xyz are coordinates in the original system;
     # coords are sparse conv grid coords. (subject to a scaling factor)
     # coords0 -> sinput0_C
     # trans is T0*T1^-1
+    feats0 = np.concatenate((xyz0, feats0), -1)
+    feats1 = np.concatenate((xyz1, feats1), -1)
+
     return (xyz0, xyz1, coords0, coords1, feats0, feats1, label0, label1, instance0, instance1, matches, trans, T0)
 
   def __getitem__(self, idx):
@@ -387,7 +401,7 @@ def make_data_loader(config, batch_size, num_threads=0):
       dset,
       batch_size=batch_size,
       shuffle=False if sampler else True,
-      num_workers=num_threads,
+      num_workers=0,#num_threads,
       collate_fn=collate_pair_fn,
       pin_memory=False,
       sampler=sampler,

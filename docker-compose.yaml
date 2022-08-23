@@ -1,0 +1,10 @@
+services:
+        pretrain:
+                image: nuneslu/contrastive_scene_context:latest
+                runtime: nvidia
+                environment:
+                      - NVIDIA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES
+                volumes: 
+                      - $PWD:/home/ContrastiveSceneContexts
+                      - $PWD/Datasets/:/home/ContrastiveSceneContexts/Datasets
+

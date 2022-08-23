@@ -88,7 +88,7 @@ class ContrastiveLossTrainer:
       config,
       data_loader):
     assert config.misc.use_gpu and torch.cuda.is_available(), "DDP mode must support GPU"
-    num_feats = 3  # always 3 for finetuning.
+    num_feats = 4  # always 3 for finetuning.
 
     self.is_master = du.is_master_proc(config.misc.num_gpus) if config.misc.num_gpus > 1 else True
 
@@ -96,9 +96,9 @@ class ContrastiveLossTrainer:
     self.cur_device = torch.cuda.current_device()
     Model = load_model(config.net.model)
     model = Model(
-        num_feats,
-        config.net.model_n_out,
-        config,
+        in_channels=num_feats,
+        #config.net.model_n_out,
+        config=config,
         D=3)
     model = model.cuda(device=self.cur_device)
     if config.misc.num_gpus > 1:
@@ -330,12 +330,12 @@ class PartitionPointNCELossTrainer(PointNCELossTrainer):
 
     # network forwarding
     sinput0 = ME.SparseTensor(
-        input_dict['sinput0_F'], coords=input_dict['sinput0_C']).to(self.cur_device)
+        features=input_dict['sinput0_F'], coordinates=input_dict['sinput0_C'], device=self.cur_device)
     F0 = self.model(sinput0)
     F0 = F0.F
 
     sinput1 = ME.SparseTensor(
-        input_dict['sinput1_F'], coords=input_dict['sinput1_C']).to(self.cur_device)
+        features=input_dict['sinput1_F'], coordinates=input_dict['sinput1_C'], device=self.cur_device)
     F1 = self.model(sinput1)
     F1 = F1.F
 
