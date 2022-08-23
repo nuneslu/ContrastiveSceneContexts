@@ -245,7 +245,7 @@ class PointNCELossTrainer(ContrastiveLossTrainer):
         total_timer.reset()
 
       # save checkpoint
-      if self.is_master and curr_iter % self.checkpoint_freq == 0:
+      if self.is_master and epoch % 10 == 0:
         lr = self.scheduler.get_last_lr()
         logging.info(f" Epoch: {epoch}, LR: {lr}")
         checkpoint_name = 'checkpoint'

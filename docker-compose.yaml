@@ -4,6 +4,8 @@ services:
                 runtime: nvidia
                 environment:
                       - NVIDIA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES
+                      - OUT_DIR=/home/ContrastiveSceneContexts/pretrain/contrastive_scene_contexts/output
+                      - DATASET=/home/ContrastiveSceneContexts/Datasets/PointContrastSemKITTI
                 volumes: 
                       - $PWD:/home/ContrastiveSceneContexts
                       - $PWD/Datasets/:/home/ContrastiveSceneContexts/Datasets
